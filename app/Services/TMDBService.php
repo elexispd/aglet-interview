@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class TMDBService
 {
@@ -16,7 +17,7 @@ class TMDBService
 
     public function __construct()
     {
-        $this->apiKey = config('services.tmdb.key', env('TMDB_API_KEY'));
+        $this->apiKey = (string) config('services.tmdb.key', '');
     }
 
     /**
@@ -24,16 +25,36 @@ class TMDBService
      */
     public function getMovies(int $page = 1): Collection
     {
-        // Get the full dataset (45 movies), memoized for the request
         $movies = $this->getAllMovies();
 
-        // Chunk into pages of 9
         $chunks = $movies->chunk(9);
 
-        // Get the chunk for the requested page (1-based index)
         $chunk = $chunks->values()->get($page - 1);
 
-        return $chunk ? collect($chunk) : collect([]);
+        return ($chunk ? collect($chunk) : collect([]))->map(fn ($movie) => $this->normalizeMovie($movie));
+    }
+
+    public function getMoviesPage(int $page = 1): array
+    {
+        if (empty($this->apiKey)) {
+            return [
+                'movies' => collect(),
+                'error' => 'TMDB_API_KEY is missing.',
+            ];
+        }
+
+        $movies = $this->getMovies($page);
+        if ($movies->isEmpty()) {
+            return [
+                'movies' => collect(),
+                'error' => 'Unable to load movies from TMDB.',
+            ];
+        }
+
+        return [
+            'movies' => $movies,
+            'error' => null,
+        ];
     }
 
     /**
@@ -67,6 +88,11 @@ class TMDBService
 
                 if ($response->successful()) {
                     $results = array_merge($results, $response->json()['results'] ?? []);
+                } else {
+                    Log::warning('TMDB popular request failed', [
+                        'status' => $response->status(),
+                        'page' => $i,
+                    ]);
                 }
             }
 
@@ -91,17 +117,40 @@ class TMDBService
         }
 
         return Cache::remember('tmdb_search_'.md5($query), 3600, function () use ($query) {
-            $response = Http::get("{$this->baseUrl}/search/movie", [
-                'api_key' => $this->apiKey,
-                'query' => $query,
-                'include_adult' => false,
-            ]);
+            if (empty($this->apiKey)) {
+                return collect([]);
+            }
+
+            $response = Http::retry(2, 200)
+                ->timeout(10)
+                ->get("{$this->baseUrl}/search/movie", [
+                    'api_key' => $this->apiKey,
+                    'query' => $query,
+                    'include_adult' => false,
+                ]);
 
             if ($response->successful()) {
-                return collect($response->json()['results'] ?? [])->take(5); // Limit for autocomplete
+                return collect($response->json()['results'] ?? [])->take(5)->map(fn ($movie) => $this->normalizeMovie($movie));
             }
+
+            Log::warning('TMDB search request failed', [
+                'status' => $response->status(),
+            ]);
 
             return collect([]);
         });
+    }
+
+    protected function normalizeMovie($movie): array
+    {
+        $data = $movie instanceof \ArrayAccess ? $movie : (array) $movie;
+
+        return [
+            'id' => $data['id'] ?? $data['tmdb_id'] ?? null,
+            'title' => $data['title'] ?? $data['name'] ?? '',
+            'poster_path' => $data['poster_path'] ?? null,
+            'release_date' => $data['release_date'] ?? null,
+            'tmdb_id' => $data['tmdb_id'] ?? $data['id'] ?? null,
+        ];
     }
 }

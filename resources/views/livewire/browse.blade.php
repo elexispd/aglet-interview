@@ -8,6 +8,7 @@ new class extends Component {
     public int $page = 1;
 
     public array $movies = [];
+    public ?string $error = null;
 
     public function mount(): void
     {
@@ -21,10 +22,9 @@ new class extends Component {
 
     public function loadMovies(): void
     {
-        $this->movies = app(\App\Services\TMDBService::class)
-            ->getMovies((int) $this->page)
-            ->values()
-            ->all();
+        $result = app(\App\Services\TMDBService::class)->getMoviesPage((int) $this->page);
+        $this->movies = ($result['movies'] ?? collect())->values()->all();
+        $this->error = $result['error'] ?? null;
     }
 
     public function nextPage(): void
@@ -48,7 +48,7 @@ new class extends Component {
 <div class="container mx-auto px-4 py-8">
     @if(empty($movies))
         <div class="text-center py-16">
-            <div class="text-gray-400 mb-4">No movies loaded.</div>
+            <div class="text-gray-400 mb-4">{{ $error ?? 'No movies loaded.' }}</div>
             <button wire:click="loadMovies" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition">
                 Reload
             </button>

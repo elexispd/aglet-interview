@@ -1,6 +1,7 @@
 <?php
 
 use Livewire\Volt\Component;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 
 new class extends Component {
@@ -30,12 +31,18 @@ new class extends Component {
             $this->isFavorite = false;
             $this->dispatch('favorites-updated');
         } else {
-            $user->favorites()->create([
-                'tmdb_id' => $this->tmdbId,
-                'title' => $this->movie['title'],
-                'poster_path' => $this->movie['poster_path'],
-                'release_date' => $this->movie['release_date'] ?? null,
-            ]);
+            try {
+                $user->favorites()->firstOrCreate(
+                    ['tmdb_id' => $this->tmdbId],
+                    [
+                        'title' => $this->movie['title'],
+                        'poster_path' => $this->movie['poster_path'],
+                        'release_date' => $this->movie['release_date'] ?? null,
+                    ]
+                );
+            } catch (QueryException) {
+                $user->favorites()->where('tmdb_id', $this->tmdbId)->first();
+            }
             $this->isFavorite = true;
             $this->dispatch('favorites-updated');
         }
