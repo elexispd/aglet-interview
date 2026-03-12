@@ -43,8 +43,9 @@ new class extends Component {
                 @error('password') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
             </div>
 
-            <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-300">
-                Sign In
+            <button type="submit" wire:loading.attr="disabled" wire:target="login" class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition duration-300">
+                <span wire:loading.remove wire:target="login">Sign In</span>
+                <span wire:loading wire:target="login">Signing in</span>
             </button>
         </form>
         

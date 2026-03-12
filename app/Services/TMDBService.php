@@ -15,6 +15,8 @@ class TMDBService
 
     protected $popularCacheKey = 'tmdb_movies_popular_45_v2';
 
+    protected $detailsCacheTtl = 3600;
+
     public function __construct()
     {
         $this->apiKey = (string) config('services.tmdb.key', '');
@@ -138,6 +140,65 @@ class TMDBService
             ]);
 
             return collect([]);
+        });
+    }
+
+    public function getMovieDetails(int $tmdbId): array
+    {
+        if ($tmdbId <= 0) {
+            return ['movie' => null, 'error' => 'Invalid movie id.'];
+        }
+
+        if (empty($this->apiKey)) {
+            return ['movie' => null, 'error' => 'TMDB_API_KEY is missing.'];
+        }
+
+        $cacheKey = "tmdb_movie_details_v2_{$tmdbId}";
+
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && array_key_exists('movie', $cached) && array_key_exists('error', $cached)) {
+            return $cached;
+        }
+
+        return Cache::remember($cacheKey, $this->detailsCacheTtl, function () use ($tmdbId) {
+            $response = Http::retry(2, 200)
+                ->timeout(10)
+                ->get("{$this->baseUrl}/movie/{$tmdbId}", [
+                    'api_key' => $this->apiKey,
+                    'language' => 'en-US',
+                    'include_adult' => false,
+                ]);
+
+            if (! $response->successful()) {
+                Log::warning('TMDB movie details request failed', [
+                    'status' => $response->status(),
+                    'tmdb_id' => $tmdbId,
+                ]);
+
+                return ['movie' => null, 'error' => 'Failed to fetch movie details'];
+            }
+
+            $data = $response->json() ?? [];
+
+            $movie = [
+                'tmdb_id' => $data['id'] ?? $tmdbId,
+                'title' => $data['title'] ?? $data['name'] ?? '',
+                'tagline' => $data['tagline'] ?? null,
+                'overview' => $data['overview'] ?? null,
+                'poster_path' => $data['poster_path'] ?? null,
+                'backdrop_path' => $data['backdrop_path'] ?? null,
+                'release_date' => $data['release_date'] ?? null,
+                'runtime' => $data['runtime'] ?? null,
+                'vote_average' => $data['vote_average'] ?? null,
+                'vote_count' => $data['vote_count'] ?? null,
+                'genres' => collect($data['genres'] ?? [])
+                    ->pluck('name')
+                    ->filter()
+                    ->values()
+                    ->all(),
+            ];
+
+            return ['movie' => $movie, 'error' => null];
         });
     }
 

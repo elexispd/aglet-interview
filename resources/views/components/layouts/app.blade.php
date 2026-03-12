@@ -46,5 +46,6 @@
             </div>
         </div>
     </footer>
+    <livewire:movie-details-modal />
 </body>
 </html>

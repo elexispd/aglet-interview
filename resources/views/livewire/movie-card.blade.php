@@ -50,7 +50,7 @@ new class extends Component {
 };
 ?>
 
-<div class="movie-card relative group bg-gray-900 rounded-lg overflow-hidden shadow-lg transition-transform duration-300 hover:scale-105 h-[500px]">
+<div @click="$dispatch('open-movie-modal', { tmdbId: {{ $tmdbId }} })" role="button" tabindex="0" class="movie-card relative group bg-gray-900 rounded-lg overflow-hidden shadow-lg transition-transform duration-300 hover:scale-105 h-[500px] cursor-pointer">
     @if(!empty($movie['poster_path']))
         <img src="https://image.tmdb.org/t/p/w500{{ $movie['poster_path'] }}" alt="{{ $movie['title'] }}" class="w-full h-full object-cover">
     @else
@@ -59,7 +59,7 @@ new class extends Component {
         </div>
     @endif
 
-    <button wire:click="toggleFavorite" class="absolute top-3 right-3 z-20 text-red-500 bg-black/50 rounded-full p-2 backdrop-blur hover:bg-black/70 transition">
+    <button wire:click.stop="toggleFavorite" class="absolute top-3 right-3 z-20 text-red-500 bg-black/50 rounded-full p-2 backdrop-blur hover:bg-black/70 transition">
         @if($isFavorite)
             <svg class="w-6 h-6 fill-current heart-pulse" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         @else
